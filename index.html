@@ -88,6 +88,8 @@
     scroll-behavior: smooth;
     font-size: var(--font-base);
     overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
   body {
     margin: 0;
@@ -96,11 +98,14 @@
     font-family: var(--font-sans);
     line-height: 1.55;
     overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
   body.mode-desktop {
-    min-width: 1240px;
-    overflow-x: auto;
+    min-width: 0;
+    width: 1240px;
+    overflow-x: hidden;
   }
   body.mode-desktop main,
   body.mode-desktop .header-inner,
@@ -838,7 +843,7 @@
       <div class="control-group">
         <label for="paramScaleInput">Größe %:</label>
         <button type="button" class="btn-pill" id="btnScaleDown" title="Verkleinern">−</button>
-        <input type="number" id="paramScaleInput" inputmode="numeric" min="60" max="150" step="5" value="100" style="width:64px; text-align:center;" title="Skalierung in Prozent (60 bis 150)">
+        <input type="number" id="paramScaleInput" inputmode="numeric" min="25" max="150" step="5" value="100" style="width:64px; text-align:center;" title="Skalierung in Prozent (25 bis 150)">
         <button type="button" class="btn-pill" id="btnScaleUp" title="Vergrößern">+</button>
         <button type="button" class="btn-pill" id="btnScaleReset" title="Auf 100 % setzen">100%</button>
       </div>
@@ -2918,15 +2923,24 @@
     document.body.classList.toggle("mode-desktop", isDesktopMode);
     document.body.classList.toggle("mode-mobile", currentViewMode === "mobile");
 
-    const clampedScale = Math.max(60, Math.min(150, Math.round(currentUiScale || 100)));
+    const clampedScale = Math.max(25, Math.min(150, Math.round(currentUiScale || 100)));
     currentUiScale = clampedScale;
 
-    let effectiveZoom = clampedScale / 100;
-    if (isDesktopMode && window.innerWidth < 1260) {
-      effectiveZoom = (window.innerWidth / 1260) * (clampedScale / 100);
+    let scale = clampedScale / 100;
+    if (isDesktopMode && window.innerWidth < 1240) {
+      scale = (window.innerWidth / 1240) * (clampedScale / 100);
     }
 
-    document.body.style.zoom = effectiveZoom.toFixed(3);
+    document.body.style.zoom = "";
+    document.body.style.transformOrigin = "top left";
+    if (Math.abs(scale - 1) < 0.001) {
+      document.body.style.transform = "";
+      document.body.style.width = isDesktopMode ? "1240px" : "";
+    } else {
+      document.body.style.transform = `scale(${scale.toFixed(4)})`;
+      document.body.style.width = isDesktopMode ? "1240px" : `${(100 / scale).toFixed(4)}%`;
+    }
+
     document.getElementById("paramViewMode").value = currentViewMode;
     document.getElementById("paramScaleInput").value = String(clampedScale);
 
@@ -2971,7 +2985,7 @@
     const updateScale = (val) => {
       const n = parseInt(val, 10);
       if (Number.isNaN(n)) return;
-      currentUiScale = Math.max(60, Math.min(150, n));
+      currentUiScale = Math.max(25, Math.min(150, n));
       applyViewSettings();
     };
     document.getElementById("paramScaleInput").addEventListener("change", (e) => updateScale(e.target.value));
@@ -2979,7 +2993,7 @@
     document.getElementById("btnScaleUp").addEventListener("click", () => updateScale(currentUiScale + 5));
     document.getElementById("btnScaleReset").addEventListener("click", () => updateScale(100));
     window.addEventListener("resize", () => {
-      if (currentViewMode === "desktop") applyViewSettings();
+      applyViewSettings();
     });
 
     buildClockSvgMarkers();
