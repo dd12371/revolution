@@ -87,6 +87,7 @@
   html {
     scroll-behavior: smooth;
     font-size: var(--font-base);
+    overflow-x: hidden;
   }
   body {
     margin: 0;
@@ -94,7 +95,28 @@
     color: var(--ink);
     font-family: var(--font-sans);
     line-height: 1.55;
+    overflow-x: hidden;
     transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  body.mode-desktop {
+    min-width: 1240px;
+    overflow-x: auto;
+  }
+  body.mode-desktop main,
+  body.mode-desktop .header-inner,
+  body.mode-desktop nav.top-nav {
+    min-width: 1200px;
+  }
+  body.mode-mobile main {
+    max-width: 640px;
+  }
+  body:not(.mode-desktop) main,
+  body:not(.mode-desktop) .card,
+  body:not(.mode-desktop) .month-card,
+  body:not(.mode-desktop) .result-box,
+  body:not(.mode-desktop) .patron-spotlight {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .tricolore-bar {
@@ -802,6 +824,23 @@
         <button type="button" class="btn-pill" data-density-set="compact" title="Kleinere Schrift und maximale Informationsdichte">Kompakt</button>
         <button type="button" class="btn-pill active" data-density-set="standard" title="Ausgewogene Standardansicht">Standard</button>
         <button type="button" class="btn-pill" data-density-set="large" title="Große Schrift und fokussierte Ansicht">Groß</button>
+      </div>
+
+      <div class="control-group">
+        <label for="paramViewMode">Ansicht:</label>
+        <select id="paramViewMode">
+          <option value="auto">Automatisch</option>
+          <option value="mobile">Mobil (1 Spalte)</option>
+          <option value="desktop">Desktop-Site</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="paramScaleInput">Größe %:</label>
+        <button type="button" class="btn-pill" id="btnScaleDown" title="Verkleinern">−</button>
+        <input type="number" id="paramScaleInput" inputmode="numeric" min="60" max="150" step="5" value="100" style="width:64px; text-align:center;" title="Skalierung in Prozent (60 bis 150)">
+        <button type="button" class="btn-pill" id="btnScaleUp" title="Vergrößern">+</button>
+        <button type="button" class="btn-pill" id="btnScaleReset" title="Auf 100 % setzen">100%</button>
       </div>
 
       <div class="control-group">
@@ -2871,25 +2910,76 @@
     try { localStorage.setItem("repCalDensity", density); } catch (_) {}
   }
 
+  let currentViewMode = "auto";
+  let currentUiScale = 100;
+
+  function applyViewSettings() {
+    const isDesktopMode = currentViewMode === "desktop";
+    document.body.classList.toggle("mode-desktop", isDesktopMode);
+    document.body.classList.toggle("mode-mobile", currentViewMode === "mobile");
+
+    const clampedScale = Math.max(60, Math.min(150, Math.round(currentUiScale || 100)));
+    currentUiScale = clampedScale;
+
+    let effectiveZoom = clampedScale / 100;
+    if (isDesktopMode && window.innerWidth < 1260) {
+      effectiveZoom = (window.innerWidth / 1260) * (clampedScale / 100);
+    }
+
+    document.body.style.zoom = effectiveZoom.toFixed(3);
+    document.getElementById("paramViewMode").value = currentViewMode;
+    document.getElementById("paramScaleInput").value = String(clampedScale);
+
+    try {
+      localStorage.setItem("repCalViewMode", currentViewMode);
+      localStorage.setItem("repCalScale", String(clampedScale));
+    } catch (_) {}
+  }
+
   function init() {
     // Restore saved preferences or system dark preference
     let savedTheme = null;
     let savedDensity = null;
+    let savedViewMode = null;
+    let savedScale = null;
     try {
       savedTheme = localStorage.getItem("repCalTheme");
       savedDensity = localStorage.getItem("repCalDensity");
+      savedViewMode = localStorage.getItem("repCalViewMode");
+      savedScale = localStorage.getItem("repCalScale");
     } catch (_) {}
     if (!savedTheme && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
       savedTheme = "dark";
     }
     if (savedTheme === "dark" || savedTheme === "light") setTheme(savedTheme);
     if (savedDensity === "compact" || savedDensity === "standard" || savedDensity === "large") setDensity(savedDensity);
+    if (savedViewMode === "auto" || savedViewMode === "mobile" || savedViewMode === "desktop") currentViewMode = savedViewMode;
+    if (savedScale && !Number.isNaN(parseInt(savedScale, 10))) currentUiScale = parseInt(savedScale, 10);
+    applyViewSettings();
 
     document.querySelectorAll("[data-theme-set]").forEach(btn => {
       btn.addEventListener("click", () => setTheme(btn.dataset.themeSet));
     });
     document.querySelectorAll("[data-density-set]").forEach(btn => {
       btn.addEventListener("click", () => setDensity(btn.dataset.densitySet));
+    });
+
+    document.getElementById("paramViewMode").addEventListener("change", (e) => {
+      currentViewMode = e.target.value;
+      applyViewSettings();
+    });
+    const updateScale = (val) => {
+      const n = parseInt(val, 10);
+      if (Number.isNaN(n)) return;
+      currentUiScale = Math.max(60, Math.min(150, n));
+      applyViewSettings();
+    };
+    document.getElementById("paramScaleInput").addEventListener("change", (e) => updateScale(e.target.value));
+    document.getElementById("btnScaleDown").addEventListener("click", () => updateScale(currentUiScale - 5));
+    document.getElementById("btnScaleUp").addEventListener("click", () => updateScale(currentUiScale + 5));
+    document.getElementById("btnScaleReset").addEventListener("click", () => updateScale(100));
+    window.addEventListener("resize", () => {
+      if (currentViewMode === "desktop") applyViewSettings();
     });
 
     buildClockSvgMarkers();
